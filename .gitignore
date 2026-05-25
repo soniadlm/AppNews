@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+.env
+.env.local
+.vercel/
+.DS_Store
+*.log
+.idea/
+.vscode/
+qa-*.png
