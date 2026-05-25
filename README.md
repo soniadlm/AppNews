@@ -3,26 +3,47 @@
 Application web de veille de presse : agrège des flux RSS sur 8 thèmes
 prédéfinis (Tech & IA, Business, France, International, Science, Climat,
 Startups, Sport), permet de créer des thèmes personnalisés par mots-clés,
-et génère des résumés et synthèses via Claude (Anthropic).
+et génère des résumés et synthèses via des modèles open-source servis par
+**Hugging Face Inference Providers**.
 
-- Stack : **FastAPI** (Python) + **SQLite** + **Anthropic Claude Haiku 4.5**
+- Stack : **FastAPI** (Python) + **SQLite** + **Llama 3.3 70B** via [Hugging Face](https://huggingface.co/)
 - Front : HTML/CSS/JS vanilla, responsive, mode sombre
 - Cache : 256 résumés d'articles + 9 briefs déjà pré-générés dans `data.db`
+
+## Pourquoi Hugging Face ?
+
+- **Pas besoin de carte bancaire** ni de création de compte spécifique :
+  on se connecte à [huggingface.co](https://huggingface.co/) avec un compte
+  GitHub ou Google.
+- **Quota gratuit** généreux sur l'API d'inférence.
+- **API OpenAI-compatible** : on peut basculer vers d'autres providers
+  (OpenRouter, Groq, Together…) sans changer le code, en surchargeant juste
+  `LLM_BASE_URL` et `OPENAI_API_KEY`.
+
+## Obtenir un token Hugging Face (2 min)
+
+1. Allez sur [huggingface.co/join](https://huggingface.co/join) et cliquez
+   sur **Sign in with GitHub** (ou Google).
+2. Une fois connecté, allez sur
+   [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens).
+3. Cliquez sur **Create new token** → type **Fine-grained**.
+4. Cochez la permission **"Make calls to Inference Providers"**.
+5. Copiez le token (`hf_...`).
 
 ## Démarrage local
 
 ```bash
 # 1. Cloner et entrer dans le projet
-git clone https://github.com/<votre-user>/AppNews.git
+git clone https://github.com/soniadlm/AppNews.git
 cd AppNews
 
 # 2. Installer les dépendances
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-# 3. Configurer la clé Anthropic
+# 3. Configurer le token Hugging Face
 cp .env.example .env
-# puis éditer .env et y mettre votre ANTHROPIC_API_KEY
+# puis éditer .env et y mettre votre HF_TOKEN
 
 # 4. Lancer le serveur
 export $(cat .env | xargs)  # charge les variables d'env
@@ -38,8 +59,9 @@ Ouvrez ensuite [http://localhost:5000](http://localhost:5000).
 1. Allez sur [vercel.com/new](https://vercel.com/new) et connectez votre compte GitHub.
 2. Importez le dépôt `AppNews`.
 3. Dans **Settings → Environment Variables**, ajoutez :
-   - `ANTHROPIC_API_KEY` = `sk-ant-...` (votre clé)
-4. Cliquez sur **Deploy**. Vercel détecte `vercel.json` et configure automatiquement le runtime Python.
+   - `HF_TOKEN` = `hf_...` (votre token Hugging Face)
+4. Cliquez sur **Deploy**. Vercel détecte `vercel.json` et configure
+   automatiquement le runtime Python.
 
 ### Option B — Via la CLI Vercel
 
@@ -47,21 +69,35 @@ Ouvrez ensuite [http://localhost:5000](http://localhost:5000).
 npm i -g vercel
 vercel login
 vercel link
-vercel env add ANTHROPIC_API_KEY production
+vercel env add HF_TOKEN production
 vercel --prod
 ```
 
 ## Variables d'environnement
 
-| Variable            | Obligatoire | Description                                                        |
-| ------------------- | ----------- | ------------------------------------------------------------------ |
-| `ANTHROPIC_API_KEY` | Oui*        | Clé API Anthropic. Sans clé, l'app sert uniquement le cache.       |
-| `ANTHROPIC_MODEL`   | Non         | Modèle Claude (défaut : `claude-haiku-4-5`).                       |
-| `VEILLE_PROD`       | Non         | Mettre `1` pour forcer le mode cache strict (pas d'appels LLM).    |
-| `VEILLE_DB_PATH`    | Non         | Chemin custom vers `data.db` (utile pour volumes persistants).     |
+| Variable         | Obligatoire | Description                                                       |
+| ---------------- | ----------- | ----------------------------------------------------------------- |
+| `HF_TOKEN`       | Oui*        | Token Hugging Face. Sans clé, l'app sert uniquement le cache.     |
+| `HF_MODEL`       | Non         | Modèle (défaut : `meta-llama/Llama-3.3-70B-Instruct`).            |
+| `LLM_BASE_URL`   | Non         | URL d'un autre provider OpenAI-compatible (OpenRouter, Groq…).    |
+| `OPENAI_API_KEY` | Non         | Clé pour un provider tiers si `LLM_BASE_URL` est défini.          |
+| `VEILLE_PROD`    | Non         | Mettre `1` pour forcer le mode cache strict (pas d'appels LLM).   |
+| `VEILLE_DB_PATH` | Non         | Chemin custom vers `data.db` (utile pour volumes persistants).    |
 
 *Sans clé, l'app fonctionne quand même : elle sert les 256 résumés et 9 briefs
 déjà présents en cache, mais ne génère pas de nouveau contenu.
+
+## Changer de modèle ou de provider
+
+Le code utilise le SDK `openai` pointé sur le router Hugging Face. Pour
+basculer vers un autre fournisseur compatible OpenAI :
+
+```bash
+# Exemple : OpenRouter (login GitHub aussi)
+LLM_BASE_URL=https://openrouter.ai/api/v1
+OPENAI_API_KEY=sk-or-v1-...
+HF_MODEL=meta-llama/llama-3.3-70b-instruct:free
+```
 
 ## Architecture
 
@@ -75,7 +111,7 @@ appnews/
 │   └── styles.css
 ├── server.py             # Routes FastAPI (/api/themes, /api/feed, /api/synthesis, /api/favorites)
 ├── db.py                 # Couche SQLite asynchrone (aiosqlite)
-├── summarizer.py         # Appels Anthropic Claude (résumés + briefs)
+├── summarizer.py         # Appels LLM (HF Inference Providers via SDK openai)
 ├── rss_sources.py        # 8 thèmes prédéfinis + pool générique pour thèmes perso
 ├── data.db               # Cache pré-généré (résumés + briefs)
 ├── requirements.txt

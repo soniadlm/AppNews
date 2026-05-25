@@ -32,13 +32,14 @@ import db
 import summarizer
 from rss_sources import PREDEFINED_THEMES, CUSTOM_POOL
 
-# LLM activé dès qu'une clé Anthropic est présente.
-# Si VEILLE_PROD=1 est forcé, on désactive même avec une clé (mode cache strict).
-_has_anthropic_key = bool(
-    os.environ.get("ANTHROPIC_API_KEY")
-    or os.environ.get("ANTHROPIC_AUTH_TOKEN")
+# LLM activé dès qu'un token Hugging Face (ou autre provider OpenAI-compatible)
+# est présent. Si VEILLE_PROD=1 est forcé, on désactive même avec une clé.
+_has_llm_key = bool(
+    os.environ.get("HF_TOKEN")
+    or os.environ.get("HUGGINGFACE_API_KEY")
+    or os.environ.get("OPENAI_API_KEY")
 )
-LLM_ENABLED = _has_anthropic_key and os.environ.get("VEILLE_PROD") != "1"
+LLM_ENABLED = _has_llm_key and os.environ.get("VEILLE_PROD") != "1"
 
 app = FastAPI(title="Veille News")
 app.add_middleware(
